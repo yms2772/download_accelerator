@@ -15,11 +15,12 @@ go build -v
 ## Options
 |Name|Description|
 |------|---|
+|Port|Port to open TCP socket|
 |URL|URL you want to download|
 |Fileanme|Filled in automatically when entering URL|
-|Parallel|The number of downloads per client at the same time|
-|Chunk Size|The size to split when sending a file from client to PC|
-|Chunk Parallel|The number of chunks sent at the same time|
+|Parallel|Number of downloads per client at the same time|
+|Chunk Size|Size to split when sending a file from client to PC|
+|Chunk Parallel|Number of chunks sent at the same time|
 
 ## Platform
 ### On Windows
