@@ -1,6 +1,8 @@
 ## About
 The program opens the TCP server on the PC, and each client communicates 1:N with the PC, dividing the requested file by the number of clients and downloading it.
 
+If 4 clients download a 1GB file, divide them into 250MB each and transfer them to the PC.
+
 ## GUI
 - [fyne-io/fyne](https://github.com/fyne-io/fyne)
 
@@ -15,8 +17,8 @@ go build -v
 ## Options
 |Name|Description|
 |------|---|
-|Port|Port to open TCP socket|
-|URL|URL you want to download|
+|Port|Port to open TCP socket (port forwarding is required if using a public IP)|
+|URL|URL to download|
 |Fileanme|Filled in automatically when entering URL|
 |Parallel|Number of downloads per client at the same time|
 |Chunk Size|Size to split when sending a file from client to PC|
