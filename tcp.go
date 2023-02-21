@@ -12,11 +12,9 @@ import (
 	"os"
 	"time"
 
-	"fyne.io/fyne/v2/dialog"
-
-	"fyne.io/fyne/v2/widget"
-
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/widget"
 )
 
 type connectionData struct {

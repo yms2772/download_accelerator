@@ -2,7 +2,10 @@ package main
 
 import (
 	"errors"
-	"github.com/dustin/go-humanize"
+	"fmt"
+	"fyne.io/fyne/v2/canvas"
+	"github.com/kkdai/youtube/v2"
+	"io"
 	"mime"
 	"net"
 	"net/http"
@@ -17,6 +20,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/dustin/go-humanize"
 )
 
 type mainAppData struct {
@@ -81,9 +85,6 @@ func main() {
 	clientPortInput := widget.NewEntry()
 	clientPortInput.SetPlaceHolder("default: 8001")
 	clientPortInput.SetText(mainApp.App.Preferences().StringWithFallback("data_transform_port", "8001"))
-	clientPortInput.OnChanged = func(s string) {
-		mainApp.App.Preferences().SetString("data_transform_port", s)
-	}
 
 	clientConnectBtn := widget.NewButtonWithIcon("Connect", theme.SearchIcon(), func() {
 		connectContent := container.NewVBox(
@@ -129,6 +130,7 @@ func main() {
 
 	sizeLabel := widget.NewLabel("")
 
+	var uri string
 	var contentLength int64
 	urlInput := widget.NewEntry()
 	urlInput.SetPlaceHolder("https://example.com")
@@ -144,41 +146,141 @@ func main() {
 			progressDlg.Show()
 			defer progressDlg.Hide()
 
-			resp, err := http.Head(s)
-			if resp != nil {
-				defer resp.Body.Close()
-			}
-			if err != nil {
-				return
-			}
-
-			if resp.StatusCode != http.StatusOK {
-				return
-			}
-			if resp.ContentLength < 0 {
-				return
-			}
-			if resp.ContentLength > 0 && resp.ContentLength < 1000000 {
-				dialog.ShowError(errors.New("content size must be over 1mb"), mainApp.Window)
-				return
-			}
-
 			var filename string
-			_, params, err := mime.ParseMediaType(resp.Header.Get("Content-Disposition"))
-			if err != nil || len(params["filename"]) == 0 {
-				u, _ := url.Parse(urlInput.Text)
-				paths := strings.Split(u.Path, "/")
-				if len(paths) != 0 {
-					filename = paths[len(paths)-1]
-				} else {
-					filename = "unknown"
+			u, _ := url.Parse(urlInput.Text)
+			switch u.Host {
+			case "www.youtube.com", "youtube.com", "youtu.be":
+				yt := youtube.Client{}
+				video, err := yt.GetVideo(urlInput.Text)
+				if err != nil {
+					dialog.ShowError(errors.New("invalid youtube url"), mainApp.Window)
+					return
 				}
-			} else {
-				filename = params["filename"]
+
+				qualitySelect := widget.NewSelect(youtubeQuality(video.Formats), nil)
+				qualitySelect.SetSelectedIndex(0)
+
+				if len(video.Thumbnails) == 0 {
+					dialog.ShowError(errors.New("thumbnail not found"), mainApp.Window)
+					return
+				}
+
+				thumbnailData := video.Thumbnails[len(video.Thumbnails)-1]
+				resp, err := http.Get(thumbnailData.URL)
+				if resp != nil {
+					defer resp.Body.Close()
+				}
+				if err != nil {
+					dialog.ShowError(errors.New("cannot get a thumbnail"), mainApp.Window)
+					return
+				}
+
+				body, _ := io.ReadAll(resp.Body)
+
+				thumbnailCanvas := canvas.NewImageFromResource(fyne.NewStaticResource("thumbnail.jpg", body))
+				thumbnailCanvas.FillMode = canvas.ImageFillStretch
+				thumbnailCanvas.SetMinSize(fyne.NewSize(550, float32(thumbnailData.Height*550/thumbnailData.Width)))
+
+				ytFormSubmit := make(chan bool)
+				ytForm := widget.NewForm(
+					widget.NewFormItem("Quality", qualitySelect),
+				)
+
+				ytTitleLabel := widget.NewHyperlink(video.Title, u)
+				ytTitleLabel.Wrapping = fyne.TextTruncate
+
+				ytResolution := widget.NewLabel(fmt.Sprintf("%d x %d", video.Formats[qualitySelect.SelectedIndex()].Width, video.Formats[qualitySelect.SelectedIndex()].Height))
+				ytAvgBitrate := widget.NewLabel(fmt.Sprintf("%s Kbps", humanize.Comma(int64(video.Formats[qualitySelect.SelectedIndex()].AverageBitrate/1000))))
+				ytAudioIncluded := widget.NewLabel("")
+				ytExpectedSize := widget.NewLabel(fmt.Sprintf("~ %s", humanize.Bytes(uint64(video.Formats[qualitySelect.SelectedIndex()].ContentLength))))
+				if video.Formats[qualitySelect.SelectedIndex()].AudioChannels == 0 {
+					ytAudioIncluded.SetText("No")
+				} else {
+					ytAudioIncluded.SetText("Yes")
+				}
+
+				qualitySelect.OnChanged = func(s string) {
+					ytResolution.SetText(fmt.Sprintf("%d x %d", video.Formats[qualitySelect.SelectedIndex()].Width, video.Formats[qualitySelect.SelectedIndex()].Height))
+					ytAvgBitrate.SetText(fmt.Sprintf("%s Kbps", humanize.Comma(int64(video.Formats[qualitySelect.SelectedIndex()].AverageBitrate/1000))))
+					ytExpectedSize.SetText(fmt.Sprintf("~ %s", humanize.Bytes(uint64(video.Formats[qualitySelect.SelectedIndex()].ContentLength))))
+					if video.Formats[qualitySelect.SelectedIndex()].AudioChannels == 0 {
+						ytAudioIncluded.SetText("No")
+					} else {
+						ytAudioIncluded.SetText("Yes")
+					}
+				}
+
+				ytDetailForm := widget.NewForm(
+					widget.NewFormItem("Title", ytTitleLabel),
+					widget.NewFormItem("Author", widget.NewLabel(video.Author)),
+					widget.NewFormItem("Views", widget.NewLabel(humanize.Comma(int64(video.Views)))),
+					widget.NewFormItem("Duration", widget.NewLabel(durationFormat(video.Duration.Seconds()))),
+					widget.NewFormItem("Resolution", ytResolution),
+					widget.NewFormItem("Avg Bitrate", ytAvgBitrate),
+					widget.NewFormItem("Audio Included", ytAudioIncluded),
+					widget.NewFormItem("Expected Size", ytExpectedSize),
+				)
+				ytDetailForm.SubmitText = "Apply"
+				ytDetailForm.OnSubmit = func() {
+					ytFormSubmit <- true
+				}
+
+				ytDialog := dialog.NewCustom("YouTube", "Exit", container.NewGridWithColumns(2,
+					container.NewBorder(thumbnailCanvas, nil, nil, nil, thumbnailCanvas, ytForm),
+					container.NewVScroll(ytDetailForm),
+				), mainApp.Window)
+				ytDialog.SetOnClosed(func() {
+					ytFormSubmit <- false
+				})
+				ytDialog.Show()
+
+				if !<-ytFormSubmit {
+					return
+				}
+				uri, err = yt.GetStreamURL(video, &video.Formats[qualitySelect.SelectedIndex()])
+				if err != nil {
+					dialog.ShowError(errors.New("cannot get a stream url"), mainApp.Window)
+					return
+				}
+				extension, _, _ := mime.ParseMediaType(video.Formats[qualitySelect.SelectedIndex()].MimeType)
+				filename = "video." + strings.Split(extension, "/")[1]
+				contentLength = video.Formats[qualitySelect.SelectedIndex()].ContentLength
+			default:
+				resp, err := http.Head(s)
+				if resp != nil {
+					defer resp.Body.Close()
+				}
+				if err != nil {
+					return
+				}
+
+				if resp.StatusCode != http.StatusOK {
+					return
+				}
+				if resp.ContentLength < 0 {
+					return
+				}
+				if resp.ContentLength > 0 && resp.ContentLength < 1000000 {
+					dialog.ShowError(errors.New("content size must be over 1mb"), mainApp.Window)
+					return
+				}
+
+				_, params, err := mime.ParseMediaType(resp.Header.Get("Content-Disposition"))
+				if err != nil || len(params["filename"]) == 0 {
+					u, _ := url.Parse(urlInput.Text)
+					paths := strings.Split(u.Path, "/")
+					if len(paths) != 0 {
+						filename = paths[len(paths)-1]
+					} else {
+						filename = "unknown"
+					}
+				} else {
+					filename = params["filename"]
+				}
+				uri = s
 			}
 			filenameInput.SetText(filename)
-			contentLength = resp.ContentLength
-			sizeLabel.SetText("~ " + humanize.Bytes(uint64(resp.ContentLength)))
+			sizeLabel.SetText("~ " + humanize.Bytes(uint64(contentLength)))
 		}()
 	}
 
@@ -265,7 +367,7 @@ func main() {
 					Command: download,
 					Download: downloadResponse{
 						ID:         i,
-						URL:        urlInput.Text,
+						URL:        uri,
 						Filename:   filenameInput.Text,
 						Connection: parallel,
 						StartIndex: startParts,

@@ -2,9 +2,10 @@ package main
 
 import (
 	_ "embed"
+	"image/color"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
-	"image/color"
 )
 
 type myTheme struct{}
