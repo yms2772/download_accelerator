@@ -13,6 +13,7 @@ git clone https://github.com/yms2772/download_accelerator.git
 cd download_accelerator
 go build -v
 ```
+The result is saved in the `downloaded` folder.
 
 ## Options
 |Name|Description|
@@ -24,7 +25,13 @@ go build -v
 |Chunk Size|Size to split when sending a file from client to PC|
 |Chunk Parallel|Number of chunks sent at the same time|
 
-## Platform
+## YouTube
+#### Supported URL: `www.youtube.com`, `youtube.com`, `youtu.be`
+*Note: Audio is only included in resolutions below `360p`. If you want to download with audio in high resolution, select `audio/mp4` or `audio/webm` in `Quality` and merge with `ffmpeg`.*
+
+![windows_youtube](https://user-images.githubusercontent.com/6222645/220338480-39738426-f40c-4495-9465-2959709ae2a3.png)
+
+## Supported Platforms
 ### On Windows
 ![windows](https://user-images.githubusercontent.com/6222645/219873230-d1bed6e8-6144-4948-8027-72a1160cd299.png)
 
