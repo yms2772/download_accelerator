@@ -3,8 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"fyne.io/fyne/v2/canvas"
-	"github.com/kkdai/youtube/v2"
 	"io"
 	"mime"
 	"net"
@@ -16,11 +14,13 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/dustin/go-humanize"
+	"github.com/kkdai/youtube/v2"
 )
 
 type mainAppData struct {
@@ -278,6 +278,7 @@ func main() {
 					filename = params["filename"]
 				}
 				uri = s
+				contentLength = resp.ContentLength
 			}
 			filenameInput.SetText(filename)
 			sizeLabel.SetText("~ " + humanize.Bytes(uint64(contentLength)))
