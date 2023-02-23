@@ -89,6 +89,9 @@ MAIN:
 				}
 
 				for _, connection := range connections {
+					if len(connection.Upload) == 0 {
+						continue MAIN
+					}
 					for _, data := range connection.Upload {
 						if len(data.Data) == 0 {
 							continue MAIN
@@ -165,6 +168,7 @@ MAIN:
 
 			if resp.SplitTransfer.Index == -1 {
 				splitTransferData[resp.ID] = make([][]byte, resp.SplitTransfer.Total)
+				connections[resp.ID].Upload = []uploadResponse{}
 				continue
 			}
 

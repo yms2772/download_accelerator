@@ -324,7 +324,7 @@ func main() {
 	}
 
 	parallelInput := widget.NewEntry()
-	parallelInput.SetText("5")
+	parallelInput.SetText("50")
 	parallelInput.Validator = func(s string) error {
 		if _, err := strconv.Atoi(s); err != nil {
 			return errors.New("must enter only numbers")
@@ -362,7 +362,7 @@ func main() {
 		go func() {
 			parallel, err := strconv.Atoi(parallelInput.Text)
 			if err != nil {
-				parallel = 5
+				parallel = 50
 			}
 
 			chunkSize, err := strconv.Atoi(chunkSizeInput.Text)
@@ -411,6 +411,7 @@ func main() {
 				}
 
 				for j := 0; j < len(downResp); j++ {
+					downResp[j].ID = i
 					downResp[j].Connection = parallel
 					downResp[j].StartIndex = int64(i) * (downResp[j].ContentLength / int64(len(checked)))
 					if i != 0 {
