@@ -8,7 +8,11 @@ If 4 clients download a 1GB file, divide them into 250MB each and transfer them 
 
 ## Installation
 You must run [yms2772/download_accelerator_agent](https://github.com/yms2772/download_accelerator_agent), before run this program.
+```bash
+go install github.com/yms2772/download_accelerator@latest
 ```
+### or
+```bash
 git clone https://github.com/yms2772/download_accelerator.git
 cd download_accelerator
 go build -v
