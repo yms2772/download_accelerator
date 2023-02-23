@@ -133,19 +133,14 @@ MAIN:
 							continue
 						}
 
-						ffmpegCmd := exec.Command(ffmpeg, "-y",
+						if err := prepareBackgroundCommand(exec.Command(ffmpeg, "-y",
 							"-i", "downloaded/"+mergedData.Upload[0].Filename,
 							"-i", "downloaded/"+mergedData.Upload[1].Filename,
 							"-c", "copy",
 							"-shortest",
 							"downloaded/youtube_with_audio.mp4",
 							"-loglevel", "warning",
-						)
-						ffmpegCmd.Stderr = os.Stderr
-						ffmpegCmd.Stdout = os.Stdout
-
-						if err := ffmpegCmd.Run(); err != nil {
-							log.Println(err)
+						)).Run(); err != nil {
 							dialog.ShowError(errors.New("cannot merge audio"), m.Window)
 							continue
 						}
