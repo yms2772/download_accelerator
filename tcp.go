@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -18,9 +19,8 @@ import (
 )
 
 type connectionData struct {
-	uploadResponse
-
-	Conn net.Conn
+	Upload []uploadResponse
+	Conn   net.Conn
 }
 
 var (
@@ -31,6 +31,7 @@ var (
 
 func (m *mainAppData) newConnection(conn net.Conn) {
 	d := json.NewDecoder(conn)
+MAIN:
 	for {
 		var resp networkResponse
 		if err := d.Decode(&resp); err != nil {
@@ -68,43 +69,92 @@ func (m *mainAppData) newConnection(conn net.Conn) {
 					continue
 				}
 
-				gz, err := gzip.NewReader(bytes.NewBuffer(mergedData.Upload.Data))
-				if err != nil {
-					dialog.ShowError(errors.New("decompress failed"), m.Window)
-					continue
+				if len(connections[mergedData.ID].Upload) != len(mergedData.Upload) {
+					connections[mergedData.ID].Upload = make([]uploadResponse, len(mergedData.Upload))
 				}
 
-				connections[mergedData.ID].Data, err = io.ReadAll(gz)
-				if err != nil {
-					dialog.ShowError(errors.New("decompress failed"), m.Window)
-					continue
+				for i, upload := range mergedData.Upload {
+					gz, err := gzip.NewReader(bytes.NewBuffer(upload.Data))
+					if err != nil {
+						dialog.ShowError(errors.New("decompress failed"), m.Window)
+						continue
+					}
+
+					connections[mergedData.ID].Upload[i].Data, err = io.ReadAll(gz)
+					if err != nil {
+						dialog.ShowError(errors.New("decompress failed"), m.Window)
+						continue
+					}
+					connections[mergedData.ID].Upload[i].ID = upload.ID
 				}
 
-				connections[mergedData.ID].ID = mergedData.Upload.ID
-				done := true
-				for _, data := range connections {
-					if len(data.Data) == 0 {
-						done = false
-						break
+				for _, connection := range connections {
+					for _, data := range connection.Upload {
+						if len(data.Data) == 0 {
+							continue MAIN
+						}
 					}
 				}
 
-				if !done {
+				mergedFileData := make([][][]byte, len(connections))
+				for _, connection := range connections {
+					for j, data := range connection.Upload {
+						if len(mergedFileData[data.ID]) == 0 {
+							mergedFileData[data.ID] = make([][]byte, len(mergedData.Upload))
+						}
+						mergedFileData[data.ID][j] = data.Data
+					}
+				}
+
+				totalData := make([][]byte, len(mergedData.Upload))
+				for _, data := range mergedFileData {
+					for i := 0; i < len(mergedData.Upload); i++ {
+						totalData[i] = append(totalData[i], data[i]...)
+					}
+				}
+
+				if len(totalData) == 0 {
 					continue
 				}
 
-				mergedFileData := make([][]byte, len(connections))
-				for _, data := range connections {
-					mergedFileData[data.ID] = data.Data
-				}
-
-				var totalData []byte
-				for _, data := range mergedFileData {
-					totalData = append(totalData, data...)
-				}
-
 				_ = os.Mkdir("downloaded", os.ModePerm)
-				_ = os.WriteFile("downloaded/"+mergedData.Upload.Filename, totalData, os.ModePerm)
+				for i := 0; i < len(mergedData.Upload); i++ {
+					_ = os.WriteFile("downloaded/"+mergedData.Upload[i].Filename, totalData[i], os.ModePerm)
+				}
+
+				switch mergedData.Upload[0].Type {
+				case generalFile:
+
+				case youtubeVideo:
+					if len(totalData) == 2 {
+						ffmpeg, ok := checkFFmpeg()
+						if !ok {
+							dialog.ShowError(errors.New("ffmpeg does not exist"), m.Window)
+							continue
+						}
+
+						ffmpegCmd := exec.Command(ffmpeg, "-y",
+							"-i", "downloaded/"+mergedData.Upload[0].Filename,
+							"-i", "downloaded/"+mergedData.Upload[1].Filename,
+							"-c", "copy",
+							"-shortest",
+							"downloaded/youtube_with_audio.mp4",
+							"-loglevel", "warning",
+						)
+						ffmpegCmd.Stderr = os.Stderr
+						ffmpegCmd.Stdout = os.Stdout
+
+						if err := ffmpegCmd.Run(); err != nil {
+							log.Println(err)
+							dialog.ShowError(errors.New("cannot merge audio"), m.Window)
+							continue
+						}
+
+						for i := 0; i < len(mergedData.Upload); i++ {
+							_ = os.Remove("downloaded/" + mergedData.Upload[i].Filename)
+						}
+					}
+				}
 
 				for _, item := range m.Log {
 					objects := item.Content.(*fyne.Container).Objects
@@ -124,13 +174,6 @@ func (m *mainAppData) newConnection(conn net.Conn) {
 			}
 
 			card := m.Log[resp.ID].Content.(*fyne.Container).Objects[0].(*widget.Card)
-			card.SetSubTitle("Receiving data from client...")
-
-			switch card.Content.(type) {
-			case *widget.ProgressBarInfinite:
-				card.Content = widget.NewProgressBar()
-			}
-
 			nowProgress := float64(resp.SplitTransfer.Index) / float64(resp.SplitTransfer.Total)
 			if card.Content.(*widget.ProgressBar).Value < nowProgress {
 				card.Content.(*widget.ProgressBar).SetValue(nowProgress)
@@ -145,11 +188,20 @@ func (m *mainAppData) newConnection(conn net.Conn) {
 				}
 				card := objects[resp.Progress.ID].(*widget.Card)
 				card.SetSubTitle(resp.Progress.Text)
+				switch card.Content.(type) {
+				case *widget.ProgressBarInfinite:
+					card.SetContent(widget.NewProgressBar())
+				}
 				card.Content.(*widget.ProgressBar).SetValue(resp.Progress.Percent)
-			case compress:
+			case splitTransfer:
 				m.Log[resp.ID].Content.(*fyne.Container).RemoveAll()
-				m.Log[resp.ID].Content.(*fyne.Container).Add(widget.NewCard("", resp.Progress.Text, widget.NewProgressBarInfinite()))
+				m.Log[resp.ID].Content.(*fyne.Container).Add(widget.NewCard("", resp.Progress.Text, widget.NewProgressBar()))
 				m.Log[resp.ID].Content.(*fyne.Container).Objects[0].(*widget.Card).SetSubTitle(resp.Progress.Text)
+			case compress:
+				for _, object := range m.Log[resp.ID].Content.(*fyne.Container).Objects {
+					object.(*widget.Card).SetSubTitle(resp.Progress.Text)
+					object.(*widget.Card).SetContent(widget.NewProgressBarInfinite())
+				}
 			}
 		}
 	}

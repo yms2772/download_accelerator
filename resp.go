@@ -1,6 +1,7 @@
 package main
 
 type commandType string
+type fileType string
 
 const (
 	download      commandType = "download"
@@ -11,23 +12,31 @@ const (
 	splitTransfer commandType = "split_transfer"
 )
 
+const (
+	generalFile  fileType = "general_file"
+	youtubeVideo fileType = "youtube_video"
+)
+
 type keepAliveResponse struct {
 	Command commandType `json:"command"`
 }
 
 type downloadResponse struct {
-	URL        string `json:"url"`
-	ID         int    `json:"id"`
-	Filename   string `json:"filename"`
-	Connection int    `json:"connection"`
-	StartIndex int64  `json:"start_index"`
-	LastIndex  int64  `json:"last_index"`
+	Type          fileType `json:"type"`
+	URL           string   `json:"url"`
+	ID            int      `json:"id"`
+	Filename      string   `json:"filename"`
+	Connection    int      `json:"connection"`
+	ContentLength int64    `json:"content_length"`
+	StartIndex    int64    `json:"start_index"`
+	LastIndex     int64    `json:"last_index"`
 }
 
 type uploadResponse struct {
-	ID       int    `json:"id"`
-	Filename string `json:"filename"`
-	Data     []byte `json:"data"`
+	Type     fileType `json:"type"`
+	ID       int      `json:"id"`
+	Filename string   `json:"filename"`
+	Data     []byte   `json:"data"`
 }
 
 type progressResponse struct {
@@ -57,8 +66,8 @@ type networkResponse struct {
 	ID            string                `json:"id"`
 	Command       commandType           `json:"command"`
 	KeepAlive     keepAliveResponse     `json:"keep_alive"`
-	Download      downloadResponse      `json:"download"`
-	Upload        uploadResponse        `json:"upload"`
+	Download      []downloadResponse    `json:"download"`
+	Upload        []uploadResponse      `json:"upload"`
 	Progress      progressResponse      `json:"progress"`
 	SplitTransfer splitTransferResponse `json:"splitTransfer"`
 	Settings      settingsResponse      `json:"settings"`

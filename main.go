@@ -130,8 +130,7 @@ func main() {
 
 	sizeLabel := widget.NewLabel("")
 
-	var uri string
-	var contentLength int64
+	var downResp []downloadResponse
 	urlInput := widget.NewEntry()
 	urlInput.SetPlaceHolder("https://example.com")
 	urlInput.Validator = func(s string) error {
@@ -147,7 +146,6 @@ func main() {
 			progressDlg.Show()
 			defer progressDlg.Hide()
 
-			var filename string
 			u, _ := url.Parse(urlInput.Text)
 			switch u.Host {
 			case "www.youtube.com", "youtube.com", "youtu.be":
@@ -187,17 +185,30 @@ func main() {
 					widget.NewFormItem("Quality", qualitySelect),
 				)
 
-				ytTitleLabel := widget.NewHyperlink(video.Title, u)
-				ytTitleLabel.Wrapping = fyne.TextTruncate
+				ytTitle := widget.NewHyperlink(video.Title, u)
+				ytTitle.Wrapping = fyne.TextTruncate
 
 				ytResolution := widget.NewLabel(fmt.Sprintf("%d x %d", video.Formats[qualitySelect.SelectedIndex()].Width, video.Formats[qualitySelect.SelectedIndex()].Height))
 				ytAvgBitrate := widget.NewLabel(fmt.Sprintf("%s Kbps", humanize.Comma(int64(video.Formats[qualitySelect.SelectedIndex()].AverageBitrate/1000))))
-				ytAudioIncluded := widget.NewLabel("")
+				ytAudioIncluded := widget.NewCheck("", nil)
 				ytExpectedSize := widget.NewLabel(fmt.Sprintf("~ %s", humanize.Bytes(uint64(video.Formats[qualitySelect.SelectedIndex()].ContentLength))))
 				if video.Formats[qualitySelect.SelectedIndex()].AudioChannels == 0 {
-					ytAudioIncluded.SetText("No")
+					ytAudioIncluded.SetChecked(false)
+					ytAudioIncluded.Enable()
 				} else {
-					ytAudioIncluded.SetText("Yes")
+					ytAudioIncluded.SetChecked(true)
+					ytAudioIncluded.Disable()
+				}
+				ytAudioIncluded.OnChanged = func(b bool) {
+					if video.Formats[qualitySelect.SelectedIndex()].AudioChannels == 0 && b {
+						ffmpeg, ok := checkFFmpeg()
+						if !ok {
+							dialog.ShowError(errors.New("ffmpeg does not exist in './bin' or PATH"), mainApp.Window)
+							ytAudioIncluded.SetChecked(false)
+							return
+						}
+						dialog.ShowInformation("Include Audio", "Download the video, then download the audio and merge it using "+ffmpeg, mainApp.Window)
+					}
 				}
 
 				qualitySelect.OnChanged = func(s string) {
@@ -205,14 +216,16 @@ func main() {
 					ytAvgBitrate.SetText(fmt.Sprintf("%s Kbps", humanize.Comma(int64(video.Formats[qualitySelect.SelectedIndex()].AverageBitrate/1000))))
 					ytExpectedSize.SetText(fmt.Sprintf("~ %s", humanize.Bytes(uint64(video.Formats[qualitySelect.SelectedIndex()].ContentLength))))
 					if video.Formats[qualitySelect.SelectedIndex()].AudioChannels == 0 {
-						ytAudioIncluded.SetText("No")
+						ytAudioIncluded.SetChecked(false)
+						ytAudioIncluded.Enable()
 					} else {
-						ytAudioIncluded.SetText("Yes")
+						ytAudioIncluded.SetChecked(true)
+						ytAudioIncluded.Disable()
 					}
 				}
 
 				ytDetailForm := widget.NewForm(
-					widget.NewFormItem("Title", ytTitleLabel),
+					widget.NewFormItem("Title", ytTitle),
 					widget.NewFormItem("Author", widget.NewLabel(video.Author)),
 					widget.NewFormItem("Views", widget.NewLabel(humanize.Comma(int64(video.Views)))),
 					widget.NewFormItem("Duration", widget.NewLabel(durationFormat(video.Duration.Seconds()))),
@@ -238,14 +251,33 @@ func main() {
 				if !<-ytFormSubmit {
 					return
 				}
-				uri, err = yt.GetStreamURL(video, &video.Formats[qualitySelect.SelectedIndex()])
+				if ytAudioIncluded.Checked {
+					audio, err := youtubeAudio(video.Formats)
+					if err != nil {
+						dialog.ShowError(errors.New("cannot find audio stream data"), mainApp.Window)
+						return
+					}
+					downResp = make([]downloadResponse, 2)
+					downResp[1].URL, err = yt.GetStreamURL(video, &audio)
+					if err != nil {
+						dialog.ShowError(errors.New("cannot get a audio stream url"), mainApp.Window)
+						return
+					}
+					downResp[1].Filename = "audio.mp4"
+					downResp[1].ContentLength = audio.ContentLength
+				} else {
+					downResp = make([]downloadResponse, 1)
+				}
+
+				downResp[0] = downloadResponse{Type: youtubeVideo}
+				downResp[0].URL, err = yt.GetStreamURL(video, &video.Formats[qualitySelect.SelectedIndex()])
 				if err != nil {
 					dialog.ShowError(errors.New("cannot get a stream url"), mainApp.Window)
 					return
 				}
 				extension, _, _ := mime.ParseMediaType(video.Formats[qualitySelect.SelectedIndex()].MimeType)
-				filename = "video." + strings.Split(extension, "/")[1]
-				contentLength = video.Formats[qualitySelect.SelectedIndex()].ContentLength
+				downResp[0].Filename = "video." + strings.Split(extension, "/")[1]
+				downResp[0].ContentLength = video.Formats[qualitySelect.SelectedIndex()].ContentLength
 			default:
 				resp, err := http.Head(s)
 				if resp != nil {
@@ -266,23 +298,28 @@ func main() {
 					return
 				}
 
+				downResp = make([]downloadResponse, 1)
 				_, params, err := mime.ParseMediaType(resp.Header.Get("Content-Disposition"))
 				if err != nil || len(params["filename"]) == 0 {
 					u, _ := url.Parse(urlInput.Text)
 					paths := strings.Split(u.Path, "/")
 					if len(paths) != 0 {
-						filename = paths[len(paths)-1]
+						downResp[0].Filename = paths[len(paths)-1]
 					} else {
-						filename = "unknown"
+						downResp[0].Filename = "unknown"
 					}
 				} else {
-					filename = params["filename"]
+					downResp[0].Filename = params["filename"]
 				}
-				uri = s
-				contentLength = resp.ContentLength
+				downResp[0].URL = s
+				downResp[0].ContentLength = resp.ContentLength
 			}
-			filenameInput.SetText(filename)
-			sizeLabel.SetText("~ " + humanize.Bytes(uint64(contentLength)))
+			var totalLength int64
+			for _, resp := range downResp {
+				totalLength += resp.ContentLength
+			}
+			filenameInput.SetText(downResp[0].Filename)
+			sizeLabel.SetText("~ " + humanize.Bytes(uint64(totalLength)))
 		}()
 	}
 
@@ -360,21 +397,11 @@ func main() {
 			startTime = time.Now()
 			logCard.SetContent(mainApp.Log[checked[0]])
 			logSelect.SetSelectedIndex(0)
-			startParts := int64(0)
-			parts := contentLength / int64(len(checked))
 
 			for i := 0; i < len(checked); i++ {
 				resp := networkResponse{
 					ID:      checked[i],
 					Command: download,
-					Download: downloadResponse{
-						ID:         i,
-						URL:        uri,
-						Filename:   filenameInput.Text,
-						Connection: parallel,
-						StartIndex: startParts,
-						LastIndex:  startParts + parts,
-					},
 					Settings: settingsResponse{
 						SplitTransferSetting: splitTransferSettingResponse{
 							ChunkSize:     chunkSize,
@@ -383,12 +410,21 @@ func main() {
 					},
 				}
 
-				if i == len(checked)-1 {
-					resp.Download.LastIndex = contentLength
+				for j := 0; j < len(downResp); j++ {
+					downResp[j].Connection = parallel
+					downResp[j].StartIndex = int64(i) * (downResp[j].ContentLength / int64(len(checked)))
+					if i != 0 {
+						downResp[j].StartIndex++
+					}
+
+					downResp[j].LastIndex = int64(i+1) * (downResp[j].ContentLength / int64(len(checked)))
+					if i == len(checked)-1 {
+						downResp[j].LastIndex = downResp[j].ContentLength
+					}
 				}
 
+				resp.Download = downResp
 				sendResponse(resp)
-				startParts += parts + 1
 			}
 		}()
 	}
