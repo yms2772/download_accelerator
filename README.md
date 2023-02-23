@@ -16,20 +16,19 @@ go build -v
 The result is saved in the `downloaded` folder.
 
 ## Options
-|Name|Description|
-|------|---|
-|Port|Port to open TCP socket (port forwarding is required if using a public IP)|
-|URL|URL to download|
-|Fileanme|Filled in automatically when entering URL|
-|Parallel|Number of downloads per client at the same time|
-|Chunk Size|Size to split when sending a file from client to PC|
-|Chunk Parallel|Number of chunks sent at the same time|
+|      Name      | Description                                                                |
+|:--------------:|:---------------------------------------------------------------------------|
+|      Port      | Port to open TCP socket (port forwarding is required if using a public IP) |
+|      URL       | URL to download                                                            |
+|    Filename    | Filled in automatically when entering URL                                  |
+|    Parallel    | Number of downloads per client at the same time                            |
+|   Chunk Size   | Size to split when sending a file from client to PC                        |
+| Chunk Parallel | Number of chunks sent at the same time                                     |
 
 ## YouTube
 #### Supported URL: `www.youtube.com`, `youtube.com`, `youtu.be`
-*Note: Audio is only included in resolutions below `360p`. If you want to download with audio in high resolution, select `audio/mp4` or `audio/webm` in `Quality` and merge with `ffmpeg`.*
+![windows_youtube](https://user-images.githubusercontent.com/6222645/220840488-02d62d9d-a7ef-455b-9d23-b321f53fa723.png)
 
-![windows_youtube](https://user-images.githubusercontent.com/6222645/220338480-39738426-f40c-4495-9465-2959709ae2a3.png)
 
 ## Supported Platforms
 ### On Windows
