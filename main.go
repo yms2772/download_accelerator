@@ -143,6 +143,7 @@ func main() {
 	urlInput.OnChanged = func(s string) {
 		go func() {
 			progressDlg := dialog.NewCustom("Connecting...", "Cancel", widget.NewProgressBarInfinite(), mainApp.Window)
+			progressDlg.Resize(fyne.NewSize(300, 0))
 			progressDlg.Show()
 			defer progressDlg.Hide()
 

@@ -114,7 +114,7 @@ func (m *mainAppData) newConnection(conn net.Conn) {
 					objects[0].(*widget.Card).SetSubTitle("Download complete")
 					objects[0].(*widget.Card).Content.(*widget.ProgressBar).SetValue(1)
 				}
-				dialog.ShowInformation("Done", fmt.Sprintf("Download complete\nElapsed time: %.2f seconds", time.Now().Sub(startTime).Seconds()), m.Window)
+				dialog.ShowInformation("Done", fmt.Sprintf("Download complete\nElapsed time: %s", durationFormat(time.Now().Sub(startTime).Seconds())), m.Window)
 				continue
 			}
 
@@ -135,7 +135,6 @@ func (m *mainAppData) newConnection(conn net.Conn) {
 			if card.Content.(*widget.ProgressBar).Value < nowProgress {
 				card.Content.(*widget.ProgressBar).SetValue(nowProgress)
 			}
-
 			splitTransferData[resp.ID][resp.SplitTransfer.Index] = resp.SplitTransfer.Data
 		case progress:
 			objects := m.Log[resp.ID].Content.(*fyne.Container).Objects
