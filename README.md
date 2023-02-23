@@ -30,12 +30,15 @@ The result is saved in the `downloaded` folder.
 | Chunk Parallel | Number of chunks sent at the same time                                     |
 
 ## YouTube
-#### Supported URL: `www.youtube.com`, `youtube.com`, `youtu.be`
+#### Supported URLs: `youtube.com`, `youtu.be`, `shorts`
+* Set the `Parallel` option to more than `50` when you download any YouTube video. Because the YouTube server is super slow.
+* The `Audio Included` option is enabled when the `ffmpeg` is in `PATH` or `./bin`. (default has no audio)
+
 ![windows_youtube](https://user-images.githubusercontent.com/6222645/220840488-02d62d9d-a7ef-455b-9d23-b321f53fa723.png)
 
 
 ## Supported Platforms
-### On Windows
+### On Windows 11
 ![windows](https://user-images.githubusercontent.com/6222645/219873230-d1bed6e8-6144-4948-8027-72a1160cd299.png)
 
 ### On MacOS (M1)
