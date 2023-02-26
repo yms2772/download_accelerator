@@ -44,6 +44,7 @@ MAIN:
 
 		switch resp.Command {
 		case errorOccurred:
+			m.Processing.Hide()
 			dialog.ShowError(resp.Error, m.Window)
 			continue
 		case keepAlive:

@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -182,8 +183,18 @@ func main() {
 				thumbnailCanvas.SetMinSize(fyne.NewSize(500, float32(thumbnailData.Height*500/thumbnailData.Width)))
 
 				ytWindow := mainApp.App.NewWindow("YouTube")
-				ytWindow.Resize(fyne.NewSize(510, 680))
+				ytWindow.Resize(fyne.NewSize(520, 700))
 				ytWindow.SetFixedSize(true)
+				ytWindow.SetMainMenu(fyne.NewMainMenu(
+					fyne.NewMenu("Others", fyne.NewMenuItem("Download Thumbnail", func() {
+						go func() {
+							filename := fmt.Sprintf("thumbnail_%dx%d.jpg", thumbnailData.Width, thumbnailData.Height)
+							_ = os.Mkdir("thumbnail", os.ModePerm)
+							_ = os.WriteFile("thumbnail/"+filename, body, os.ModePerm)
+							dialog.ShowInformation("Thumbnail Download", "Thumbnail saved: thumbnail/"+filename, ytWindow)
+						}()
+					})),
+				))
 
 				ytTitle := widget.NewHyperlink(video.Title, u)
 				ytTitle.Wrapping = fyne.TextTruncate
