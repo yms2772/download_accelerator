@@ -33,14 +33,14 @@ The result is saved in the `downloaded` folder.
 #### Supported URLs: `youtube.com`, `youtu.be`, `shorts`
 * Set the `Parallel` option to more than `50` when you download any YouTube video. Because the YouTube server is super slow.
 * The `Audio Included` option is enabled when the `ffmpeg` is in `PATH` or `./bin`. (default has no audio)
+* You can download the thumbnail image of the YouTube video from `Menu -> Others -> Download Thumbnail`.
 
-![windows_youtube](https://user-images.githubusercontent.com/6222645/220840488-02d62d9d-a7ef-455b-9d23-b321f53fa723.png)
+![windows_youtube](https://user-images.githubusercontent.com/6222645/221404955-4fb87e03-873d-49e3-88e9-51c4bb88982b.png)
 
 
 ## Supported Platforms
 ### On Windows 11
-![windows](https://user-images.githubusercontent.com/6222645/219873230-d1bed6e8-6144-4948-8027-72a1160cd299.png)
+![windows](https://user-images.githubusercontent.com/6222645/221404834-9dc50dfb-f03a-447f-992a-d5a0898b40ab.png)
 
 ### On MacOS (M1)
-![macos](https://user-images.githubusercontent.com/6222645/219873286-0fd4d8bd-a1e4-41f0-8c16-045288d6d76f.png)
 
