@@ -36,6 +36,7 @@ The result is saved in the `downloaded` folder.
 * You can download the thumbnail image of the YouTube video from `Menu -> Others -> Download Thumbnail`.
 
 ![windows_youtube](https://user-images.githubusercontent.com/6222645/221404955-4fb87e03-873d-49e3-88e9-51c4bb88982b.png)
+![windows_youtube_download](https://user-images.githubusercontent.com/6222645/221405594-28aae628-66e6-40c5-a8c5-04fee49c1a64.gif)
 
 
 ## Supported Platforms
