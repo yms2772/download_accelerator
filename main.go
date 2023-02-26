@@ -24,11 +24,12 @@ import (
 )
 
 type mainAppData struct {
-	W, H   float32
-	App    fyne.App
-	Window fyne.Window
-	Client *container.Scroll
-	Log    map[string]*container.Scroll
+	W, H       float32
+	App        fyne.App
+	Window     fyne.Window
+	Client     *container.Scroll
+	Log        map[string]*container.Scroll
+	Processing *dialog.ProgressInfiniteDialog
 }
 
 func main() {
@@ -50,15 +51,9 @@ func main() {
 	}))
 
 	mainApp.Log = make(map[string]*container.Scroll)
+	mainApp.Processing = dialog.NewProgressInfinite("Process", "Processing...", mainApp.Window)
 
-	go func() {
-		ticker := time.NewTicker(time.Second)
-		for range ticker.C {
-			mainApp.Client.Refresh()
-		}
-	}()
-
-	logCard := widget.NewCard("Log", "", container.NewVScroll(container.NewVBox()))
+	logCard := widget.NewCard("", "", container.NewVScroll(container.NewVBox()))
 
 	logSelect := widget.NewSelect([]string{}, func(s string) {
 		logCard.SetContent(mainApp.Log[s])
@@ -356,8 +351,15 @@ func main() {
 		return nil
 	}
 
+	pasteURL := widget.NewButtonWithIcon("", theme.ContentPasteIcon(), func() {
+		if mainApp.Window.Clipboard() == nil {
+			return
+		}
+		urlInput.SetText(mainApp.Window.Clipboard().Content())
+	})
+
 	settingForm := widget.NewForm(
-		widget.NewFormItem("URL", urlInput),
+		widget.NewFormItem("URL", container.NewBorder(nil, nil, nil, pasteURL, urlInput, pasteURL)),
 		widget.NewFormItem("Filename", container.NewVBox(filenameInput, sizeLabel)),
 		widget.NewFormItem("Parallel", parallelInput),
 		widget.NewFormItem("Chunk Size", container.NewGridWithColumns(2, chunkSizeInput, widget.NewLabelWithStyle("MB", fyne.TextAlignLeading, fyne.TextStyle{}))),
@@ -400,6 +402,7 @@ func main() {
 				return
 			}
 
+			mainApp.Processing.Show()
 			logCard.SetContent(mainApp.Log[checked[0]])
 			logSelect.SetSelectedIndex(0)
 

@@ -162,6 +162,7 @@ MAIN:
 					objects[0].(*widget.Card).SetSubTitle("Download complete")
 					objects[0].(*widget.Card).Content.(*widget.ProgressBar).SetValue(1)
 				}
+				m.Processing.Hide()
 				dialog.ShowInformation("Done", fmt.Sprintf("Download complete\nElapsed time: %s", durationFormat(time.Now().Sub(startTime).Seconds())), m.Window)
 				continue
 			}
