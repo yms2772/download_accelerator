@@ -85,37 +85,35 @@ func main() {
 	clientPortInput.SetPlaceHolder("default: 8001")
 	clientPortInput.SetText(mainApp.App.Preferences().StringWithFallback("data_transform_port", "8001"))
 
-	clientConnectBtn := widget.NewButtonWithIcon("", theme.SearchIcon(), func() {
-		connectContent := container.NewVBox(
-			widget.NewLabel("Connect to client..."),
-			widget.NewProgressBarInfinite(),
-		)
-		connectDialog := dialog.NewCustom("Connect", "Cancel", connectContent, mainApp.Window)
-		connectDialog.SetOnClosed(func() {
-
-		})
-		connectDialog.Show()
-		defer connectDialog.Hide()
-
+	clientConnectBtn := widget.NewButtonWithIcon("", theme.SearchIcon(), nil)
+	clientConnectBtn.OnTapped = func() {
 		go func() {
-			l, err := net.Listen("tcp", "0.0.0.0:"+mainApp.App.Preferences().StringWithFallback("data_transform_port", "8001"))
-			if nil != err {
-				dialog.ShowError(errors.New("cannot connect to client"), mainApp.Window)
-				return
-			}
-			defer l.Close()
+			mainApp.Processing.Show()
+			defer mainApp.Processing.Hide()
 
-			for {
-				conn, err := l.Accept()
+			go func() {
+				clientConnectBtn.Disable()
+				defer clientConnectBtn.Enable()
+
+				l, err := net.Listen("tcp", "0.0.0.0:"+mainApp.App.Preferences().StringWithFallback("data_transform_port", "8001"))
 				if nil != err {
-					dialog.ShowError(errors.New("connection refused"), mainApp.Window)
-					continue
+					dialog.ShowError(errors.New(fmt.Sprintf("cannot open tcp server on %s port", mainApp.App.Preferences().StringWithFallback("data_transform_port", "8001"))), mainApp.Window)
+					return
 				}
+				defer l.Close()
 
-				go mainApp.newConnection(conn)
-			}
+				for {
+					conn, err := l.Accept()
+					if nil != err {
+						dialog.ShowError(errors.New("connection refused"), mainApp.Window)
+						continue
+					}
+
+					go mainApp.newConnection(conn)
+				}
+			}()
 		}()
-	})
+	}
 
 	clientConnectBox := container.NewBorder(nil, nil, nil, clientConnectBtn, widget.NewForm(widget.NewFormItem("Port", clientPortInput)), clientConnectBtn)
 
