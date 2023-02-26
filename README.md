@@ -17,7 +17,7 @@ git clone https://github.com/yms2772/download_accelerator.git
 cd download_accelerator
 go build -v
 ```
-The result is saved in the `downloaded` folder.
+The result will be saved in the `downloaded` folder.
 
 ## Options
 |      Name      | Description                                                                |
@@ -44,4 +44,4 @@ The result is saved in the `downloaded` folder.
 ![windows](https://user-images.githubusercontent.com/6222645/221404834-9dc50dfb-f03a-447f-992a-d5a0898b40ab.png)
 
 ### On MacOS (M1)
-
+![macos](https://user-images.githubusercontent.com/6222645/221409409-1533da0d-008c-4cac-9807-4a35ce520ba9.png)
