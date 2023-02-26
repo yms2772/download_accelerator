@@ -24,6 +24,7 @@ import (
 )
 
 type mainAppData struct {
+	W, H   float32
 	App    fyne.App
 	Window fyne.Window
 	Client *container.Scroll
@@ -35,8 +36,10 @@ func main() {
 	mainApp.App = app.NewWithID("download_accelerator")
 	mainApp.App.Settings().SetTheme(&myTheme{})
 
+	mainApp.W, mainApp.H = 750, 400
 	mainApp.Window = mainApp.App.NewWindow("Download Accelerator")
-	mainApp.Window.Resize(fyne.NewSize(1280, 720))
+	mainApp.Window.Resize(fyne.NewSize(mainApp.W, mainApp.H))
+	mainApp.Window.SetFixedSize(true)
 	mainApp.Window.SetMaster()
 
 	mainApp.Client = container.NewVScroll(container.NewVBox())
@@ -86,7 +89,7 @@ func main() {
 	clientPortInput.SetPlaceHolder("default: 8001")
 	clientPortInput.SetText(mainApp.App.Preferences().StringWithFallback("data_transform_port", "8001"))
 
-	clientConnectBtn := widget.NewButtonWithIcon("Connect", theme.SearchIcon(), func() {
+	clientConnectBtn := widget.NewButtonWithIcon("", theme.SearchIcon(), func() {
 		connectContent := container.NewVBox(
 			widget.NewLabel("Connect to client..."),
 			widget.NewProgressBarInfinite(),
@@ -118,7 +121,7 @@ func main() {
 		}()
 	})
 
-	clientConnectBox := container.NewGridWithColumns(2, widget.NewForm(widget.NewFormItem("Port", clientPortInput)), clientConnectBtn)
+	clientConnectBox := container.NewBorder(nil, nil, nil, clientConnectBtn, widget.NewForm(widget.NewFormItem("Port", clientPortInput)), clientConnectBtn)
 
 	filenameInput := widget.NewEntry()
 	filenameInput.Validator = func(s string) error {
@@ -141,12 +144,15 @@ func main() {
 	}
 	urlInput.OnChanged = func(s string) {
 		go func() {
-			progressDlg := dialog.NewCustom("Connecting...", "Cancel", widget.NewProgressBarInfinite(), mainApp.Window)
+			progressDlg := dialog.NewProgressInfinite("Connect", "Connecting...", mainApp.Window)
 			progressDlg.Resize(fyne.NewSize(300, 0))
 			progressDlg.Show()
 			defer progressDlg.Hide()
 
-			u, _ := url.Parse(urlInput.Text)
+			u, err := url.Parse(urlInput.Text)
+			if err != nil {
+				return
+			}
 			switch u.Host {
 			case "www.youtube.com", "youtube.com", "youtu.be":
 				yt := youtube.Client{}
@@ -178,12 +184,11 @@ func main() {
 
 				thumbnailCanvas := canvas.NewImageFromResource(fyne.NewStaticResource("thumbnail.jpg", body))
 				thumbnailCanvas.FillMode = canvas.ImageFillStretch
-				thumbnailCanvas.SetMinSize(fyne.NewSize(550, float32(thumbnailData.Height*550/thumbnailData.Width)))
+				thumbnailCanvas.SetMinSize(fyne.NewSize(500, float32(thumbnailData.Height*500/thumbnailData.Width)))
 
-				ytFormSubmit := make(chan bool)
-				ytForm := widget.NewForm(
-					widget.NewFormItem("Quality", qualitySelect),
-				)
+				ytWindow := mainApp.App.NewWindow("YouTube")
+				ytWindow.Resize(fyne.NewSize(510, 680))
+				ytWindow.SetFixedSize(true)
 
 				ytTitle := widget.NewHyperlink(video.Title, u)
 				ytTitle.Wrapping = fyne.TextTruncate
@@ -201,13 +206,14 @@ func main() {
 				}
 				ytAudioIncluded.OnChanged = func(b bool) {
 					if video.Formats[qualitySelect.SelectedIndex()].AudioChannels == 0 && b {
-						ffmpeg, ok := checkFFmpeg()
-						if !ok {
-							dialog.ShowError(errors.New("ffmpeg does not exist in './bin' or PATH"), mainApp.Window)
+						dlg := dialog.NewProgressInfinite("Check", "Cheking ffmpeg...", ytWindow)
+						dlg.Show()
+						defer dlg.Hide()
+						if _, ok := checkFFmpeg(); !ok {
+							dialog.ShowError(errors.New("ffmpeg does not exist in './bin' or PATH"), ytWindow)
 							ytAudioIncluded.SetChecked(false)
 							return
 						}
-						dialog.ShowInformation("Include Audio", "Download the video, then download the audio and merge it using "+ffmpeg, mainApp.Window)
 					}
 				}
 
@@ -224,6 +230,7 @@ func main() {
 					}
 				}
 
+				ytFormSubmit := make(chan bool)
 				ytDetailForm := widget.NewForm(
 					widget.NewFormItem("Title", ytTitle),
 					widget.NewFormItem("Author", widget.NewLabel(video.Author)),
@@ -233,20 +240,19 @@ func main() {
 					widget.NewFormItem("Avg Bitrate", ytAvgBitrate),
 					widget.NewFormItem("Audio Included", ytAudioIncluded),
 					widget.NewFormItem("Expected Size", ytExpectedSize),
+					widget.NewFormItem("Quality", qualitySelect),
 				)
 				ytDetailForm.SubmitText = "Apply"
 				ytDetailForm.OnSubmit = func() {
 					ytFormSubmit <- true
+					ytWindow.Close()
 				}
 
-				ytDialog := dialog.NewCustom("YouTube", "Exit", container.NewGridWithColumns(2,
-					container.NewBorder(thumbnailCanvas, nil, nil, nil, thumbnailCanvas, ytForm),
-					container.NewVScroll(ytDetailForm),
-				), mainApp.Window)
-				ytDialog.SetOnClosed(func() {
+				ytWindow.SetContent(container.NewVScroll(container.NewBorder(thumbnailCanvas, nil, nil, nil, thumbnailCanvas, ytDetailForm)))
+				ytWindow.SetOnClosed(func() {
 					ytFormSubmit <- false
 				})
-				ytDialog.Show()
+				ytWindow.Show()
 
 				if !<-ytFormSubmit {
 					return
@@ -394,10 +400,18 @@ func main() {
 				return
 			}
 
-			startTime = time.Now()
 			logCard.SetContent(mainApp.Log[checked[0]])
 			logSelect.SetSelectedIndex(0)
 
+			logWindow := mainApp.App.NewWindow("Download Accelerator LogViewer")
+			logWindow.Resize(fyne.NewSize(400, 600))
+			logWindow.SetContent(container.NewBorder(logSelectBoxBorder, nil, nil, nil,
+				logSelectBoxBorder,
+				logCard,
+			))
+			logWindow.Show()
+
+			startTime = time.Now()
 			for i := 0; i < len(checked); i++ {
 				resp := networkResponse{
 					ID:      checked[i],
@@ -430,15 +444,12 @@ func main() {
 		}()
 	}
 
-	mainApp.Window.SetContent(container.NewGridWithColumns(3,
-		container.NewBorder(clientConnectBox, nil, nil, nil,
-			clientConnectBox,
-			mainApp.Client,
+	mainApp.Window.SetContent(container.NewHBox(
+		container.NewGridWrap(fyne.NewSize(mainApp.W*33.3/100, mainApp.H),
+			container.NewBorder(clientConnectBox, nil, nil, nil, clientConnectBox, mainApp.Client),
 		),
-		widget.NewCard("Add", "", settingForm),
-		container.NewBorder(logSelectBoxBorder, nil, nil, nil,
-			logSelectBoxBorder,
-			logCard,
+		container.NewGridWrap(fyne.NewSize(mainApp.W*66.6/100, mainApp.H),
+			widget.NewCard("Add", "", settingForm),
 		),
 	))
 	mainApp.Window.ShowAndRun()
