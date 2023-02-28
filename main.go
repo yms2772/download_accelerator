@@ -28,6 +28,7 @@ type mainAppData struct {
 	W, H       float32
 	App        fyne.App
 	Window     fyne.Window
+	LogWindow  fyne.Window
 	Client     *container.Scroll
 	Log        map[string]*container.Scroll
 	Processing *dialog.ProgressInfiniteDialog
@@ -309,8 +310,7 @@ func main() {
 				}
 
 				downResp = make([]downloadResponse, 1)
-				_, params, err := mime.ParseMediaType(resp.Header.Get("Content-Disposition"))
-				if err != nil || len(params["filename"]) == 0 {
+				if _, params, err := mime.ParseMediaType(resp.Header.Get("Content-Disposition")); err != nil || len(params["filename"]) == 0 {
 					u, _ := url.Parse(urlInput.Text)
 					paths := strings.Split(u.Path, "/")
 					if len(paths) != 0 {
@@ -415,7 +415,7 @@ func main() {
 			logCard.SetContent(mainApp.Log[checked[0]])
 			logSelect.SetSelectedIndex(0)
 
-			logWindow := mainApp.App.NewWindow("Download Accelerator LogViewer")
+			logWindow := mainApp.App.NewWindow("LogViewer")
 			logWindow.Resize(fyne.NewSize(400, 600))
 			logWindow.SetContent(container.NewBorder(logSelectBoxBorder, nil, nil, nil,
 				logSelectBoxBorder,
@@ -423,6 +423,7 @@ func main() {
 			))
 			logWindow.Show()
 
+			mainApp.LogWindow = logWindow
 			startTime = time.Now()
 			for i := 0; i < len(checked); i++ {
 				resp := networkResponse{

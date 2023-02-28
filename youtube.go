@@ -37,7 +37,7 @@ func durationFormat(seconds float64) string {
 
 func checkFFmpeg() (string, bool) {
 	for _, ffmpeg := range []string{"ffmpeg", "bin/ffmpeg", "./bin/ffmpeg"} {
-		if err := exec.Command(ffmpeg, "-version").Run(); err == nil {
+		if err := prepareBackgroundCommand(exec.Command(ffmpeg, "-version")).Run(); err == nil {
 			return ffmpeg, true
 		}
 	}

@@ -36,14 +36,15 @@ type uploadResponse struct {
 	Type     fileType `json:"type"`
 	ID       int      `json:"id"`
 	Filename string   `json:"filename"`
-	Data     []byte   `json:"data"`
+	Data     [][]byte `json:"data"`
 }
 
 type progressResponse struct {
-	ID      int         `json:"id"`
-	Command commandType `json:"command"`
-	Text    string      `json:"text"`
-	Percent float64     `json:"percent"`
+	ID           int         `json:"id"`
+	Command      commandType `json:"command"`
+	Text         string      `json:"text"`
+	Percent      float64     `json:"percent"`
+	NetworkUsage []int64     `json:"network_usage"`
 }
 
 type splitTransferResponse struct {

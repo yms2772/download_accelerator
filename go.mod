@@ -14,7 +14,7 @@ require (
 	github.com/bitly/go-simplejson v0.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dlclark/regexp2 v1.8.1 // indirect
-	github.com/dop251/goja v0.0.0-20230216180835-5937a312edda // indirect
+	github.com/dop251/goja v0.0.0-20230226152633-7c93113e17ac // indirect
 	github.com/fredbi/uri v1.0.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/fyne-io/gl-js v0.0.0-20220802150000-8e339395f381 // indirect
