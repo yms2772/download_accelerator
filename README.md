@@ -1,3 +1,4 @@
+[![Docker Image Size](https://badgen.net/docker/size/yms2772/download_accelerator_agent?icon=docker&label=image%20size)](https://hub.docker.com/r/yms2772/download_accelerator_agent)
 ## About
 The program opens the TCP server on the PC, and each client communicates 1:N with the PC, dividing the requested file by the number of clients and downloading it.
 
