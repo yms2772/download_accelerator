@@ -1,20 +1,16 @@
-package main
+package agent
 
 type commandType string
 type fileType string
 
 const (
+	upload        commandType = "upload"
 	download      commandType = "download"
 	compress      commandType = "compress"
 	progress      commandType = "progress"
 	errorOccurred commandType = "error"
 	keepAlive     commandType = "keep_alive"
 	splitTransfer commandType = "split_transfer"
-)
-
-const (
-	generalFile  fileType = "general_file"
-	youtubeVideo fileType = "youtube_video"
 )
 
 type keepAliveResponse struct {

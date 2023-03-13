@@ -11,16 +11,27 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"sync"
 	"time"
+
+	"github.com/yms2772/download_accelerator/cmd"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
+
+	"github.com/dustin/go-humanize"
 )
 
+type uploadResult struct {
+	ID   int
+	Data []byte
+}
+
 type connectionData struct {
-	Upload []uploadResponse
-	Conn   net.Conn
+	Upload         []uploadResult
+	Conn           net.Conn
+	LastConnection time.Time
 }
 
 var (
@@ -28,6 +39,24 @@ var (
 	connections       = make(map[string]*connectionData)
 	splitTransferData = make(map[string][][]byte)
 )
+
+func decompress(compressed [][]byte) [][]byte {
+	wg := new(sync.WaitGroup)
+	result := make([][]byte, len(compressed))
+	for i, data := range compressed {
+		wg.Add(1)
+		gz, err := gzip.NewReader(bytes.NewBuffer(data))
+		if err != nil {
+			return nil
+		}
+		go func(reader *gzip.Reader, n int) {
+			defer wg.Done()
+			result[n], _ = io.ReadAll(reader)
+		}(gz, i)
+	}
+	wg.Wait()
+	return result
+}
 
 func (m *mainAppData) newConnection(conn net.Conn) {
 	d := json.NewDecoder(conn)
@@ -49,6 +78,7 @@ MAIN:
 			continue
 		case keepAlive:
 			if _, ok := connections[resp.ID]; ok {
+				connections[resp.ID].LastConnection = time.Now()
 				continue
 			}
 			log.Printf("Connected: %s", resp.ID)
@@ -70,21 +100,22 @@ MAIN:
 					continue
 				}
 
+				if connections[mergedData.ID] == nil {
+					connections[mergedData.ID] = &connectionData{}
+				}
+
 				if len(connections[mergedData.ID].Upload) != len(mergedData.Upload) {
-					connections[mergedData.ID].Upload = make([]uploadResponse, len(mergedData.Upload))
+					connections[mergedData.ID].Upload = make([]uploadResult, len(mergedData.Upload))
 				}
 
 				for i, upload := range mergedData.Upload {
-					gz, err := gzip.NewReader(bytes.NewBuffer(upload.Data))
-					if err != nil {
+					decompressed := decompress(upload.Data)
+					if decompressed == nil {
 						dialog.ShowError(errors.New("decompress failed"), m.Window)
-						continue
+						continue MAIN
 					}
-
-					connections[mergedData.ID].Upload[i].Data, err = io.ReadAll(gz)
-					if err != nil {
-						dialog.ShowError(errors.New("decompress failed"), m.Window)
-						continue
+					for _, data := range decompressed {
+						connections[mergedData.ID].Upload[i].Data = append(connections[mergedData.ID].Upload[i].Data, data...)
 					}
 					connections[mergedData.ID].Upload[i].ID = upload.ID
 				}
@@ -128,7 +159,6 @@ MAIN:
 
 				switch mergedData.Upload[0].Type {
 				case generalFile:
-
 				case youtubeVideo:
 					if len(totalData) == 2 {
 						ffmpeg, ok := checkFFmpeg()
@@ -137,10 +167,11 @@ MAIN:
 							continue
 						}
 
-						if err := prepareBackgroundCommand(exec.Command(ffmpeg, "-y",
+						if err := cmd.PrepareBackgroundCommand(exec.Command(ffmpeg, "-y",
 							"-i", "downloaded/"+mergedData.Upload[0].Filename,
 							"-i", "downloaded/"+mergedData.Upload[1].Filename,
-							"-c", "copy",
+							"-c:v", "copy",
+							"-c:a", "copy",
 							"-shortest",
 							"downloaded/youtube_with_audio.mp4",
 							"-loglevel", "warning",
@@ -170,7 +201,7 @@ MAIN:
 
 			if resp.SplitTransfer.Index == -1 {
 				splitTransferData[resp.ID] = make([][]byte, resp.SplitTransfer.Total)
-				connections[resp.ID].Upload = []uploadResponse{}
+				connections[resp.ID].Upload = []uploadResult{}
 				continue
 			}
 
@@ -187,6 +218,11 @@ MAIN:
 				if len(objects) < resp.Progress.ID {
 					continue
 				}
+				var sum int64
+				for _, item := range resp.Progress.NetworkUsage {
+					sum += item
+				}
+				m.LogWindow.SetTitle(fmt.Sprintf("LogViewer - %s/s", humanize.Bytes(uint64(sum))))
 				card := objects[resp.Progress.ID].(*widget.Card)
 				card.SetSubTitle(resp.Progress.Text)
 				switch card.Content.(type) {
@@ -199,10 +235,9 @@ MAIN:
 				m.Log[resp.ID].Content.(*fyne.Container).Add(widget.NewCard("", resp.Progress.Text, widget.NewProgressBar()))
 				m.Log[resp.ID].Content.(*fyne.Container).Objects[0].(*widget.Card).SetSubTitle(resp.Progress.Text)
 			case compress:
-				for _, object := range m.Log[resp.ID].Content.(*fyne.Container).Objects {
-					object.(*widget.Card).SetSubTitle(resp.Progress.Text)
-					object.(*widget.Card).SetContent(widget.NewProgressBarInfinite())
-				}
+				m.LogWindow.SetTitle("LogViewer")
+				objects[resp.Progress.ID].(*widget.Card).SetSubTitle(resp.Progress.Text)
+				objects[resp.Progress.ID].(*widget.Card).SetContent(widget.NewProgressBarInfinite())
 			}
 		}
 	}
