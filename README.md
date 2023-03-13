@@ -32,6 +32,7 @@ docker run -d --name download_accelerator \
 |      Name      | Description                                                                |
 |:--------------:|:---------------------------------------------------------------------------|
 |      Port      | Port to open TCP socket (port forwarding is required if using a public IP) |
+|      Self      | Self client mode (without running `Download Agent`)                        |
 |      URL       | URL to download                                                            |
 |    Filename    | Filled in automatically when entering URL                                  |
 |    Parallel    | Number of downloads per client at the same time                            |
