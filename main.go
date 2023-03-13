@@ -2,10 +2,8 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"io"
-	"log"
 	"mime"
 	"net"
 	"net/http"
@@ -22,56 +20,20 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-
 	"github.com/dustin/go-humanize"
 	"github.com/kkdai/youtube/v2"
-	"github.com/yms2772/download_accelerator/agent"
 )
 
 type mainAppData struct {
 	W, H       float32
 	App        fyne.App
 	Window     fyne.Window
-	LogWindow  fyne.Window
 	Client     *container.Scroll
 	Log        map[string]*container.Scroll
 	Processing *dialog.ProgressInfiniteDialog
-	SelfClient *agent.Data
-	Connected  bool
-}
-
-func (m *mainAppData) refreshClient() {
-	for id, conn := range connections {
-		if time.Now().Sub(conn.LastConnection).Seconds() >= 1 {
-			delete(connections, id)
-			for _, object := range m.Client.Content.(*fyne.Container).Objects {
-				switch object.(type) {
-				case *widget.Check:
-					if object.(*widget.Check).Text == id {
-						object.Hide()
-					}
-				}
-			}
-		}
-	}
 }
 
 func main() {
-	runMode := flag.String("mode", "downloader", "run mode: 'downloader', 'client' (default: 'downloader')")
-	flag.Parse()
-
-	switch *runMode {
-	case "downloader":
-	case "client":
-		agentData := agent.New()
-		if err := agentData.RunAgent(); err != nil {
-			log.Fatal(err)
-		}
-	default:
-		flag.PrintDefaults()
-		return
-	}
-
 	mainApp := new(mainAppData)
 	mainApp.App = app.NewWithID("download_accelerator")
 	mainApp.App.Settings().SetTheme(&myTheme{})
@@ -83,80 +45,11 @@ func main() {
 	mainApp.Window.SetMaster()
 
 	mainApp.Client = container.NewVScroll(container.NewVBox())
-
-	allCheck := widget.NewCheck("All", func(b bool) {
-		go func() {
-			if !mainApp.Connected {
-				dialog.ShowError(errors.New("tcp server is closed"), mainApp.Window)
-				return
-			}
-
-			for _, object := range mainApp.Client.Content.(*fyne.Container).Objects {
-				switch object.(type) {
-				case *widget.Check:
-					object.(*widget.Check).SetChecked(b)
-				}
-			}
-		}()
-	})
-
-	selfCheck := widget.NewCheck("Self", func(b bool) {
-		go func() {
-			if !mainApp.Connected {
-				dialog.ShowError(errors.New("tcp server is closed"), mainApp.Window)
-				return
-			}
-
-			if b {
-				mainApp.SelfClient = agent.New()
-				mainApp.Processing.Show()
-
-				go func() {
-					for {
-						time.Sleep(time.Second)
-						if _, ok := connections["self_client"]; ok {
-							for _, object := range mainApp.Client.Content.(*fyne.Container).Objects {
-								switch object.(type) {
-								case *widget.Check:
-									if object.(*widget.Check).Text == "self_client" {
-										object.(*widget.Check).SetChecked(b)
-									}
-								}
-							}
-							mainApp.Processing.Hide()
-							return
-						}
-					}
-				}()
-
-				if err := mainApp.SelfClient.RunAgent(agent.RunAgentOptions{
-					ID:   "self_client",
-					IP:   "127.0.0.1",
-					Port: mainApp.App.Preferences().StringWithFallback("data_transform_port", "8001"),
-				}); err != nil {
-					dialog.ShowError(errors.New("an error occurred:\n"+err.Error()), mainApp.Window)
-				}
-			} else {
-				if mainApp.SelfClient == nil {
-					dialog.ShowError(errors.New("cannot stop the self client"), mainApp.Window)
-					return
-				}
-				mainApp.SelfClient.Cancel()
-			}
-		}()
-	})
-
-	allCheck.Disable()
-	selfCheck.Disable()
-
-	mainApp.Client.Content.(*fyne.Container).Add(container.NewHBox(allCheck, selfCheck))
-
-	go func() {
-		ticker := time.NewTicker(1 * time.Second)
-		for range ticker.C {
-			mainApp.refreshClient()
+	mainApp.Client.Content.(*fyne.Container).Add(widget.NewCheck("All", func(b bool) {
+		for _, object := range mainApp.Client.Content.(*fyne.Container).Objects {
+			object.(*widget.Check).SetChecked(b)
 		}
-	}()
+	}))
 
 	mainApp.Log = make(map[string]*container.Scroll)
 	mainApp.Processing = dialog.NewProgressInfinite("Process", "Processing...", mainApp.Window)
@@ -200,14 +93,7 @@ func main() {
 
 			go func() {
 				clientConnectBtn.Disable()
-				allCheck.Enable()
-				selfCheck.Enable()
-				defer func() {
-					clientConnectBtn.Enable()
-					allCheck.Disable()
-					selfCheck.Disable()
-					mainApp.Connected = false
-				}()
+				defer clientConnectBtn.Enable()
 
 				l, err := net.Listen("tcp", "0.0.0.0:"+mainApp.App.Preferences().StringWithFallback("data_transform_port", "8001"))
 				if nil != err {
@@ -215,8 +101,6 @@ func main() {
 					return
 				}
 				defer l.Close()
-
-				mainApp.Connected = true
 
 				for {
 					conn, err := l.Accept()
@@ -300,62 +184,14 @@ func main() {
 				ytWindow.Resize(fyne.NewSize(520, 700))
 				ytWindow.SetFixedSize(true)
 				ytWindow.SetMainMenu(fyne.NewMainMenu(
-					fyne.NewMenu("Tools",
-						fyne.NewMenuItem("Download Thumbnail", func() {
-							go func() {
-								filename := fmt.Sprintf("thumbnail_%dx%d.jpg", thumbnailData.Width, thumbnailData.Height)
-								_ = os.Mkdir("thumbnail", os.ModePerm)
-								_ = os.WriteFile("thumbnail/"+filename, body, os.ModePerm)
-								dialog.ShowInformation("Thumbnail Download", "Saved at: thumbnail/"+filename, ytWindow)
-							}()
-						}),
-						fyne.NewMenuItem("Export Heat Seeker (.pbf file)", func() {
-							go func() {
-								dlg := dialog.NewProgressInfinite("Heat Seeker", "Exporting heat seeker from YouTube...", ytWindow)
-								dlg.Show()
-								defer dlg.Hide()
-
-								hsData, err := youtubeHeatSeeker(video.ID)
-								if err != nil {
-									log.Print(err)
-									dialog.ShowError(errors.New("cannot export the heat seeker"), ytWindow)
-									return
-								}
-
-								f, err := os.OpenFile("downloaded/youtube_with_audio.pbf", os.O_WRONLY|os.O_CREATE|os.O_APPEND, os.ModeAppend)
-								if err != nil {
-									log.Print(err)
-									dialog.ShowError(errors.New("cannot create the pbf file"), ytWindow)
-									return
-								}
-								defer f.Close()
-
-								_, _ = f.WriteString("[PlayRepeat]\n")
-								count := 0
-
-								for i := 0; i < len(hsData.Chapter); i++ {
-									var duration int64
-									if i == len(hsData.Chapter)-1 {
-										duration = video.Duration.Milliseconds() - hsData.Chapter[i].StartMillis
-									} else {
-										duration = hsData.Chapter[i+1].StartMillis - hsData.Chapter[i].StartMillis
-									}
-									_, _ = f.WriteString(fmt.Sprintf("%d=%d*%d*0*%s\n", count, hsData.Chapter[i].StartMillis, duration, hsData.Chapter[i].Title))
-									_, _ = f.WriteString(fmt.Sprintf("%d_d=0\n", count))
-									_, _ = f.WriteString(fmt.Sprintf("%d_e=0\n", count))
-									count++
-								}
-
-								for i, item := range hsData.HeatSeeker {
-									_, _ = f.WriteString(fmt.Sprintf("%d=%d*%d*0*No.%d\n", count, item.StartMillis, video.Duration.Milliseconds()-item.StartMillis, i+1))
-									_, _ = f.WriteString(fmt.Sprintf("%d_d=0\n", count))
-									_, _ = f.WriteString(fmt.Sprintf("%d_e=0\n", count))
-									count++
-								}
-								dialog.ShowInformation("Heat Seeker", "Saved at: downloaded/youtube_with_audio.pbf", ytWindow)
-							}()
-						}),
-					),
+					fyne.NewMenu("Others", fyne.NewMenuItem("Download Thumbnail", func() {
+						go func() {
+							filename := fmt.Sprintf("thumbnail_%dx%d.jpg", thumbnailData.Width, thumbnailData.Height)
+							_ = os.Mkdir("thumbnail", os.ModePerm)
+							_ = os.WriteFile("thumbnail/"+filename, body, os.ModePerm)
+							dialog.ShowInformation("Thumbnail Download", "Thumbnail saved: thumbnail/"+filename, ytWindow)
+						}()
+					})),
 				))
 
 				ytTitle := widget.NewHyperlink(video.Title, u)
@@ -473,7 +309,8 @@ func main() {
 				}
 
 				downResp = make([]downloadResponse, 1)
-				if _, params, err := mime.ParseMediaType(resp.Header.Get("Content-Disposition")); err != nil || len(params["filename"]) == 0 {
+				_, params, err := mime.ParseMediaType(resp.Header.Get("Content-Disposition"))
+				if err != nil || len(params["filename"]) == 0 {
 					u, _ := url.Parse(urlInput.Text)
 					paths := strings.Split(u.Path, "/")
 					if len(paths) != 0 {
@@ -540,11 +377,6 @@ func main() {
 	settingForm.SubmitText = "Download"
 	settingForm.OnSubmit = func() {
 		go func() {
-			if !mainApp.Connected {
-				dialog.ShowError(errors.New("tcp server is closed"), mainApp.Window)
-				return
-			}
-
 			parallel, err := strconv.Atoi(parallelInput.Text)
 			if err != nil {
 				parallel = 50
@@ -563,22 +395,19 @@ func main() {
 			var checked []string
 			logSelect.Options = []string{}
 			for _, object := range mainApp.Client.Content.(*fyne.Container).Objects {
-				switch object.(type) {
-				case *widget.Check:
-					check := object.(*widget.Check)
-					if check.Text != "All" && check.Visible() && check.Checked {
-						checked = append(checked, check.Text)
-						mainApp.Log[check.Text] = container.NewVScroll(container.NewVBox())
-						logSelect.Options = append(logSelect.Options, check.Text)
-						for i := 0; i < parallel; i++ {
-							mainApp.Log[check.Text].Content.(*fyne.Container).Add(widget.NewCard("", "Preparing to download...", widget.NewProgressBar()))
-						}
+				check := object.(*widget.Check)
+				if check.Text != "All" && check.Checked {
+					checked = append(checked, check.Text)
+					mainApp.Log[check.Text] = container.NewVScroll(container.NewVBox())
+					logSelect.Options = append(logSelect.Options, check.Text)
+					for i := 0; i < parallel; i++ {
+						mainApp.Log[check.Text].Content.(*fyne.Container).Add(widget.NewCard("", "Preparing to download...", widget.NewProgressBar()))
 					}
 				}
 			}
 
 			if len(checked) == 0 {
-				dialog.ShowError(errors.New("no client selected"), mainApp.Window)
+				dialog.ShowError(errors.New("no clients checked"), mainApp.Window)
 				return
 			}
 
@@ -586,7 +415,7 @@ func main() {
 			logCard.SetContent(mainApp.Log[checked[0]])
 			logSelect.SetSelectedIndex(0)
 
-			logWindow := mainApp.App.NewWindow("LogViewer")
+			logWindow := mainApp.App.NewWindow("Download Accelerator LogViewer")
 			logWindow.Resize(fyne.NewSize(400, 600))
 			logWindow.SetContent(container.NewBorder(logSelectBoxBorder, nil, nil, nil,
 				logSelectBoxBorder,
@@ -594,7 +423,6 @@ func main() {
 			))
 			logWindow.Show()
 
-			mainApp.LogWindow = logWindow
 			startTime = time.Now()
 			for i := 0; i < len(checked); i++ {
 				resp := networkResponse{

@@ -1,13 +1,13 @@
 //go:build windows
 
-package cmd
+package main
 
 import (
 	"os/exec"
 	"syscall"
 )
 
-func PrepareBackgroundCommand(cmd *exec.Cmd) *exec.Cmd {
+func prepareBackgroundCommand(cmd *exec.Cmd) *exec.Cmd {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	return cmd
 }
